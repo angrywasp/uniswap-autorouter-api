@@ -1,8 +1,9 @@
 import express from 'express';
 import { AlphaRouter } from '@uniswap/smart-order-router';
-import { TradeType } from '@uniswap/smart-order-router';
+import { Token, CurrencyAmount, Percent, TradeType} from '@uniswap/sdk-core';
 import Web3 from 'web3';
 import { AbiItem } from 'web3-utils'
+import { ethers } from 'ethers'
 
 import TokenAbi from './abis/Token.json';
 
@@ -36,15 +37,16 @@ const test = (req: any, res: any) => {
     res.status(200).send('hello');
 }
 
-const quote = async (req: any, res: any) => {
+const route = async (req: any, res: any) => {
     try
     {
         let chainId = networks[req.params.id].id;
-        let chainRpc = networks[res.params.id].rpc;
+        let chainRpc = networks[req.params.id].rpc;
 
         let from = req.query.from;
         let to = req.query.to;
         let sender = req.query.sender;
+        let amount = req.query.amount;
 
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
         let fromContract = new web3.eth.Contract(TokenAbi as AbiItem[], from);
@@ -60,51 +62,32 @@ const quote = async (req: any, res: any) => {
 
         await Promise.all([fromName, fromSymbol, fromDecimals, toName, toSymbol, toDecimals]);
 
-        let fromToken = new Token(chainId, from, await fromDecimals, await fromSymbol, await fromName);
-        let toToken = new Token(chainId, to, await toDecimals, await toSymbol, await toName);
+        let fromToken = new Token(chainId, from, Number(await fromDecimals), await fromSymbol, await fromName);
+        let toToken = new Token(chainId, to, Number(await toDecimals), await toSymbol, await toName);
 
-        const router = new AlphaRouter({ chainId: chainId, provider: chainRpc });
+        let fromAmount = CurrencyAmount.fromRawAmount(fromToken, amount);
 
-        const route = await router.route(0, to, TradeType.EXACT_INPUT, {
+        let rpcProvider = new ethers.providers.JsonRpcProvider(chainRpc);
 
+        const router = new AlphaRouter({ chainId: chainId, provider: rpcProvider });
+
+        const route = await router.route(fromAmount, toToken, TradeType.EXACT_INPUT, {
+            recipient: sender,
+            slippageTolerance: new Percent(5, 100),
+            deadline: Math.floor(Date.now() / 1000 + 1800)
         });
+
+        if (route == null)
+            res.status(404).send();
+        else {
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).send(JSON.stringify(route, null, 4));
+        }
     } catch (e) {
         console.log(e);
-        res.status(400).send('Bad Request');
+        res.status(400).send();
     }
 }
-
-/*const bridge = async (req: any, res: any) => {
-
-    try {
-        const id = parseInt(req.params.id);
-
-        let bridge: Bridge = new Bridge(id);
-        let result = await bridge.getSorted();
-        res.status(200).send(Util.toJson(result));
-    } catch {
-        res.status(400).send('Bad Request');
-    }
-}
-
-const bridgeCount = async (req: any, res: any) => {
-
-    try {
-        const id = parseInt(req.params.id);
-
-        let entityCount = await Util.getEntityCount(id);
-        if (entityCount == null) {
-            res.status(400).send('Bad Request');
-        }
-        else {
-            res.status(200).send(entityCount?.toString());
-        }
-    } catch {
-        res.status(400).send('Bad Request');
-    }
-}*/
 
 app.get('/test/', test);
-app.get('/quote/:id/', quote);
-//app.get('/bridge/:id', bridge);
-//app.get('/bridge/count/:id', bridgeCount);
+app.get('/route/:id/', route);
