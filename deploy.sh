@@ -15,6 +15,10 @@ function _deploy_file() {
 
 npm run build
 
-_deploy_file ${SERVER} "dist/index.js" "~/uniswap-autorouter-api"
-_deploy_file ${SERVER} "dist/index.js.map" "~/uniswap-autorouter-api"
-_deploy_file ${SERVER} "dist/abis/Token.json" "~/uniswap-autorouter-api/abis"
+ssh -i ${SSH_KEY} -p ${PORT} ${USER}@${HOST} 'screen -XS autorouter-api quit'
+
+_deploy_file ${SERVER} "dist/index.js" "~/uniswap-autorouter-api/index.js"
+_deploy_file ${SERVER} "dist/index.js.map" "~/uniswap-autorouter-api/index.js.map"
+_deploy_file ${SERVER} "dist/abis/Token.json" "~/uniswap-autorouter-api/abis/Token.json"
+
+ssh -i ${SSH_KEY} -p ${PORT} ${USER}@${HOST} 'screen -Smd autorouter-api node ~/uniswap-autorouter-api/.'

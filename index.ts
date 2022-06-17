@@ -20,7 +20,7 @@ const networks: {[key: string]: IChain} = {
     bnb: { id: 56, rpc: 'https://bsc-dataseed.binance.org/' },
     matic: { id: 137, rpc: 'https://rpc-mainnet.maticvigil.com' },
     avax: { id: 43114, rpc: 'https://api.avax.network/ext/bc/C/rpc' },
-    xdai: { id: 100, rpc: 'https://rpc.xdaichain.com/' },
+    xdai: { id: 100, rpc: 'https://gnosis-mainnet.public.blastapi.io' },
     ftm: { id: 250, rpc: 'https://rpc.ftm.tools/' },
     cro: { id: 25, rpc: 'https://evm-cronos.crypto.org' }
 }
