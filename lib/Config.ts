@@ -53,7 +53,7 @@ export class Config {
             exchanges: [
                 {
                     id: 0,
-                    name: 'UniSwap',
+                    name: 'UniSwap v2',
                     uniswapVersion: 2
                 },
                 {
@@ -70,6 +70,11 @@ export class Config {
                     id: 3,
                     name: 'CRO Defi Swap',
                     uniswapVersion: 2
+                },
+                {
+                    id: 4,
+                    name: 'UniSwap v3',
+                    uniswapVersion: 3
                 }
             ],
             exchange: '0x9Bb0cF3BFe76603D7af6dC84da91756f109f695A'
@@ -193,7 +198,12 @@ export class Config {
                     id: 1,
                     name: 'SushiSwap',
                     uniswapVersion: 2
-                }
+                },
+                {
+                    id: 2,
+                    name: 'UniSwap v3',
+                    uniswapVersion: 3
+                },
             ],
             exchange: '0xB2da7aCF973b99Fa3bFDA9b9276Ed5358231f135'
         },

@@ -7,12 +7,34 @@ import { AbiItem } from 'web3-utils'
 import { ethers } from 'ethers'
 
 import TokenAbi from './abis/Token.json';
+import TraderAbi from './abis/Trader.json';
 import { Config, IExchange } from './lib/Config';
 import { Dex, IBaseToken, INetwork, SwapData } from './lib/Dex';
 import { FeeCalculator } from './lib/FeeCalculator';
+import { Conversions } from './lib/Conversions';
 
 const app = express();
 const port = 8002;
+
+interface IUniV3Token extends IBaseToken
+{
+    address: string,
+    name: string,
+    ticker: string,
+    decimals: number
+    fee: number
+}
+
+export interface SwapDataV3 {
+    input: BigDecimal,
+    fee: BigDecimal,
+    expectedOutput: BigDecimal,
+    minOutput: BigDecimal,
+    priceImpact: BigDecimal,
+    path: IUniV3Token[] | null,
+    exchangeId: number,
+    exchangeName: string
+}
 
 app.get('/', (req: any, res: any) => {
     res.render('index');
@@ -35,9 +57,10 @@ const route2 = async (req: any, res: any) => {
         let to = req.query.to;
         let sender = req.query.sender;
         let amount = req.query.amount;
-        let slippage = req.query.slippage * 100;
+        let slippage = req.query.slippage;
 
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
+
         let fromContract = new web3.eth.Contract(TokenAbi as AbiItem[], from);
         let toContract = new web3.eth.Contract(TokenAbi as AbiItem[], to);
 
@@ -56,7 +79,13 @@ const route2 = async (req: any, res: any) => {
         let toSymbol = toContract.methods.symbol().call();
         let toDecimals = toContract.methods.decimals().call();
 
-        await Promise.all([fromName, fromSymbol, fromDecimals, toName, toSymbol, toDecimals]);
+        try {
+            await Promise.all([fromName, fromSymbol, fromDecimals, toName, toSymbol, toDecimals]);
+        } catch (e) {
+            console.log(e);
+            res.status(500).send();
+            return;
+        }
 
         let fromToken: IBaseToken = {
             address: from,
@@ -76,17 +105,23 @@ const route2 = async (req: any, res: any) => {
 
         await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
             if (e.uniswapVersion == 2) {
-                let ex: IExchange = {
-                    id: e.id,
-                    name: e.name,
-                    uniswapVersion: e.uniswapVersion
-                };
-
-                let dex: Dex = new Dex(network, ex);
-                await dex.init();
-                let swap: SwapData | null = await dex.getBestPath(fromToken, toToken, new BigDecimal(amount), slippage);
-                if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
-                    bestSwap = swap;
+                try {
+                    let ex: IExchange = {
+                        id: e.id,
+                        name: e.name,
+                        uniswapVersion: e.uniswapVersion
+                    };
+    
+                    let dex: Dex = new Dex(network, ex);
+                    await dex.init();
+                    let swap: SwapData | null = await dex.getBestPath(fromToken, toToken, new BigDecimal(amount), slippage);
+                    if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
+                        bestSwap = swap;
+                } catch (e) {
+                    console.log(e);
+                    res.status(500).send();
+                    return;
+                }
             }
         }));
 
@@ -110,12 +145,9 @@ const route3 = async (req: any, res: any) => {
         let from = req.query.from;
         let to = req.query.to;
         let sender = req.query.sender;
-        let amount = req.query.amount;
-        let slippage = req.query.slippage;
-
-        let fee = 25;
-
+        
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
+
         let fromContract = new web3.eth.Contract(TokenAbi as AbiItem[], from);
         let toContract = new web3.eth.Contract(TokenAbi as AbiItem[], to);
 
@@ -127,8 +159,17 @@ const route3 = async (req: any, res: any) => {
         let toSymbol = toContract.methods.symbol().call();
         let toDecimals = toContract.methods.decimals().call();
 
-        await Promise.all([fromName, fromSymbol, fromDecimals, toName, toSymbol, toDecimals]);
+        let fee = 100;
 
+        try {
+            await Promise.all([fromName, fromSymbol, fromDecimals, toName, toSymbol, toDecimals]);
+        } catch (e) {
+            console.log(e);
+            res.status(500).send();
+            return;
+        }
+
+        let amount = Conversions.toAu(new BigDecimal(req.query.amount), await fromDecimals);
         let fromToken = new Token(chainId, from, Number(await fromDecimals), await fromSymbol, await fromName);
         let toToken = new Token(chainId, to, Number(await toDecimals), await toSymbol, await toName);
 
@@ -138,41 +179,52 @@ const route3 = async (req: any, res: any) => {
 
         const router = new AlphaRouter({ chainId: chainId, provider: rpcProvider });
 
-        let swaps: SwapRoute[] = [];
+        let swaps: any[] = [];
+
+        let trader = new web3.eth.Contract(TraderAbi as AbiItem[], Config.networks[req.params.id].exchange);
 
         await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
             if (e.uniswapVersion == 3) {
-                const route = await router.route(fromAmount, toToken, TradeType.EXACT_INPUT, {
-                    recipient: sender,
-                    slippageTolerance: new Percent(slippage, 100),
-                    deadline: Math.floor(Date.now() / 1000 + 1800)
-                });
-                
-                if (route != null)
-                    swaps.push(route);
+                try {
+                    //let dexInfo: any = await trader.methods.queryDex(e.id).call(); 
+                    const route = await router.route(fromAmount, toToken, TradeType.EXACT_INPUT, {
+                        recipient: sender,
+                        slippageTolerance: new Percent(req.query.slippage, 10000),
+                        deadline: Math.floor(Date.now() / 1000 + 1800)
+                    });
+                    
+                    if (route != null) {
+                        let swap: SwapDataV3 = {
+                            input: new BigDecimal(req.query.amount),
+                            fee: FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee),
+                            expectedOutput: new BigDecimal(0),
+                            minOutput: new BigDecimal(0),
+                            priceImpact: new BigDecimal(0),
+                            path: [],
+                            exchangeId: -1,
+                            exchangeName: 'Uniswap v3'
+                        }
+
+                        route.route[0].tokenPath.map(e => {
+                            swap.path!.push({
+                                address: e.address,
+                                name: e.name!,
+                                ticker: e.symbol!,
+                                decimals: e.decimals,
+                                fee: 0
+                            })
+                        });
+
+                        swaps.push(swap);
+                        swaps.push(route);
+                    }
+                } catch (e) {
+                    console.log(e);
+                    res.status(500).send();
+                    return;
+                }
             }
         }));
-
-        
-
-        /*let swap: SwapData = {
-            input: amount,
-            fee: FeeCalculator.calculateFeeForTotal(amount, fee),
-            dexFee: new BigDecimal(0),
-
-        }*/
-
-        /*let swap: SwapData = {
-            input: BigDecimal,
-    fee: BigDecimal,
-    dexFee: BigDecimal,
-    expectedOutput: BigDecimal,
-    minOutput: BigDecimal,
-    priceImpact: BigDecimal,
-    path: IBaseToken[] | null,
-    exchangeId: number,
-    exchangeName: string
-        }*/
 
         if (swaps == null || swaps.length === 0)
             res.status(404).send();

@@ -6,7 +6,7 @@ import { Contract } from 'web3-eth-contract';
 import TraderAbi from '../abis/Trader.json';
 import UniswapFactoryAbi from '../abis/UniswapFactory.json';
 import UniswapPairAbi from '../abis/UniswapPair.json';
-import { Conversions as convert } from './Conversions';
+import { Conversions } from './Conversions';
 import { FeeCalculator } from './FeeCalculator';
 import { IExchange } from './Config';
 
@@ -229,9 +229,9 @@ export class Dex {
             input: input,
             fee: uniFee,
             dexFee: dexFee,
-            expectedOutput: expectedOutput,
-            minOutput: minOutput,
-            priceImpact: priceImpact,
+            expectedOutput: new BigDecimal(Conversions.truncate(expectedOutput, 18)),
+            minOutput: new BigDecimal(Conversions.truncate(minOutput, 18)),
+            priceImpact: new BigDecimal(Conversions.truncate(priceImpact, 3)),
             path: null,
             exchangeId: this.#ex.id,
             exchangeName: this.#ex.name
