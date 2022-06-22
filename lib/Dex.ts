@@ -137,8 +137,8 @@ export class Dex {
             return new Promise<{ pairFound: boolean, fromReserve: BigDecimal, toReserve: BigDecimal }>((resolve) => {
                 resolve({
                     pairFound: true,
-                    fromReserve: convert.fromAu(reserves.reserve0, from.decimals),
-                    toReserve: convert.fromAu(reserves.reserve1, to.decimals),
+                    fromReserve: Conversions.fromAu(reserves.reserve0, from.decimals),
+                    toReserve: Conversions.fromAu(reserves.reserve1, to.decimals),
                 });
             });
         }
@@ -146,8 +146,8 @@ export class Dex {
             return new Promise<{ pairFound: boolean, fromReserve: BigDecimal, toReserve: BigDecimal }>((resolve) => {
                 resolve({
                     pairFound: true,
-                    fromReserve: convert.fromAu(reserves.reserve1, from.decimals),
-                    toReserve: convert.fromAu(reserves.reserve0, to.decimals),
+                    fromReserve: Conversions.fromAu(reserves.reserve1, from.decimals),
+                    toReserve: Conversions.fromAu(reserves.reserve0, to.decimals),
                 });
             });
         }
