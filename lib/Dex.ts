@@ -219,9 +219,7 @@ export class Dex {
         let expectedOutput: BigDecimal = toRes.subtract(coeff.divide(fromRes, 18));
         let slippage: BigDecimal = FeeCalculator.calculateFeeForTotal(expectedOutput, slippageBasisPoints);
         let minOutput: BigDecimal = expectedOutput.subtract(slippage);
-
-        //toRes = toRes.subtract(minOutput);
-
+        
         let newMarket: BigDecimal = fromRes.divide(toRes, 18);
         let priceImpact = this.calculatePriceImpact(currentMarket, newMarket);
 

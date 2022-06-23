@@ -23,15 +23,27 @@ interface IUniV3Token extends IBaseToken {
     name: string,
     ticker: string,
     decimals: number
-    fee: number
+}
+
+export interface SwapDataV2 {
+    input: number,
+    fee: number,
+    dexFee: number,
+    expectedOutput: number,
+    minOutput: number,
+    priceImpact: number,
+    path: IBaseToken[] | null,
+    exchangeId: number,
+    exchangeName: string
 }
 
 export interface SwapDataV3 {
-    input: BigDecimal,
-    fee: BigDecimal,
-    expectedOutput: BigDecimal,
-    minOutput: BigDecimal,
-    priceImpact: BigDecimal,
+    input: number,
+    fee: number[],
+    dexFee: number,
+    expectedOutput: number,
+    minOutput: number,
+    priceImpact: number,
     path: IUniV3Token[] | null,
     exchangeId: number,
     exchangeName: string
@@ -102,7 +114,7 @@ const route2 = async (req: any, res: any) => {
             decimals: Number(await toDecimals)
         };
 
-        let bestSwap: SwapData | null = null;
+        let bestSwap: SwapDataV2 | null = null;
 
         await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
             if (e.uniswapVersion == 2) {
@@ -116,8 +128,22 @@ const route2 = async (req: any, res: any) => {
                     let dex: Dex = new Dex(network, ex);
                     await dex.init();
                     let swap: SwapData | null = await dex.getBestPath(fromToken, toToken, new BigDecimal(amount), slippage);
-                    if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
-                        bestSwap = swap;
+
+                    if (swap === null)
+                        return;
+
+                    if (bestSwap == null || swap.minOutput > new BigDecimal(bestSwap.minOutput))
+                        bestSwap = {
+                            input: Number(swap.input.getValue()),
+                            fee: Number(swap.fee.getValue()),
+                            dexFee: Number(swap.dexFee.getValue()),
+                            expectedOutput: Number(swap.expectedOutput.getValue()),
+                            minOutput: Number(swap.minOutput.getValue()),
+                            priceImpact: Number(swap.priceImpact.getValue()),
+                            path: swap.path,
+                            exchangeId: swap.exchangeId,
+                            exchangeName: swap.exchangeName
+                        };
                 } catch (e) {
                     console.log(e);
                     res.status(500).send();
@@ -199,11 +225,12 @@ const route3 = async (req: any, res: any) => {
                         return;
 
                     let swap: SwapDataV3 = {
-                        input: new BigDecimal(req.query.amount),
-                        fee: FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee),
-                        expectedOutput: new BigDecimal(route.trade.outputAmount.toExact()),
-                        minOutput: new BigDecimal(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toExact()),
-                        priceImpact: new BigDecimal(route.trade.priceImpact.toFixed(3)),
+                        input: Number(req.query.amount),
+                        fee: [],
+                        dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
+                        expectedOutput: Number(route.trade.outputAmount.toExact()),
+                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toExact()),
+                        priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                         path: [],
                         exchangeId: -1,
                         exchangeName: 'Uniswap v3'
@@ -214,18 +241,17 @@ const route3 = async (req: any, res: any) => {
                             address: e.address,
                             name: e.name!,
                             ticker: e.symbol!,
-                            decimals: e.decimals,
-                            fee: 0
+                            decimals: e.decimals
                         })
                     });
 
                     if (swap.path == null)
                         return;
 
-                    for (let i = 0; i < route.trade.routes[0].pools.length; i++) {
-                        let pool: any = route.trade.routes[0].pools[i];
-                        swap.path[i].fee = pool.fee;
-                    }
+                    route.trade.routes[0].pools.map(e => {
+                        let pool: any = e;
+                        swap.fee.push(pool.fee);
+                    })
 
                     if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
                         bestSwap = swap;
