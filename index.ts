@@ -129,7 +129,7 @@ const route2 = async (req: any, res: any) => {
                     await dex.init();
                     let swap: SwapData | null = await dex.getBestPath(fromToken, toToken, new BigDecimal(amount), slippage);
 
-                    if (swap === null)
+                    if (swap === null || swap.path === null)
                         return;
 
                     if (bestSwap == null || swap.minOutput > new BigDecimal(bestSwap.minOutput))
@@ -137,8 +137,8 @@ const route2 = async (req: any, res: any) => {
                             input: Number(swap.input.getValue()),
                             fee: Number(swap.fee.getValue()),
                             dexFee: Number(swap.dexFee.getValue()),
-                            expectedOutput: Number(swap.expectedOutput.getValue()),
-                            minOutput: Number(swap.minOutput.getValue()),
+                            expectedOutput: Number(Number(swap.expectedOutput.getValue()).toFixed(swap.path[-1].decimals)),
+                            minOutput: Number(Number(swap.minOutput.getValue()).toFixed(swap.path[-1].decimals)),
                             priceImpact: Number(swap.priceImpact.getValue()),
                             path: swap.path,
                             exchangeId: swap.exchangeId,
@@ -228,8 +228,8 @@ const route3 = async (req: any, res: any) => {
                         input: Number(req.query.amount),
                         fee: [],
                         dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
-                        expectedOutput: Number(route.trade.outputAmount.toExact()),
-                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toExact()),
+                        expectedOutput: Number(route.trade.outputAmount.toFixed(route.trade.routes[0].path[-1].decimals)),
+                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(route.trade.routes[0].path[-1].decimals)),
                         priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                         path: [],
                         exchangeId: -1,
