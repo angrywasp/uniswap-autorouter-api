@@ -79,6 +79,49 @@ export class Config {
             ],
             exchange: '0x9Bb0cF3BFe76603D7af6dC84da91756f109f695A'
         },
+        ganache: {
+            id: 1,
+            rpc: 'https://mainnet.infura.io/v3/9354d2b6c5ee45c2a4036efd7b617783',
+            exchangeBasePairs: [
+                {
+                    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+                    name: 'Wrapped ETH',
+                    ticker: 'WETH',
+                    decimals: 18
+                },
+                {
+                    address: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+                    name: 'Tether USD',
+                    ticker: 'USDT',
+                    decimals: 6
+                },
+                {
+                    address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+                    name: 'USD Coin',
+                    ticker: 'USDC',
+                    decimals: 6
+                },
+                {
+                    address: '0x6b175474e89094c44da98b954eedeac495271d0f',
+                    name: 'Dai Stablecoin',
+                    ticker: 'DAI',
+                    decimals: 18
+                }
+            ],
+            exchanges: [
+                {
+                    id: 0,
+                    name: 'UniSwap v2',
+                    uniswapVersion: 2
+                },
+                {
+                    id: 1,
+                    name: 'UniSwap v3',
+                    uniswapVersion: 3
+                }
+            ],
+            exchange: '0x9Bb0cF3BFe76603D7af6dC84da91756f109f695A'
+        },
         rinkeby: {
             id: 4,
             rpc: 'https://rinkeby.infura.io/v3/9354d2b6c5ee45c2a4036efd7b617783',
