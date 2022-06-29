@@ -5,6 +5,7 @@ import { Token, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core';
 import { Pair } from '@uniswap/v2-sdk';
 import { Pool } from '@uniswap/v3-sdk'
 import Web3 from 'web3';
+import Mixed from 'web3-utils';
 import { AbiItem } from 'web3-utils'
 import { ethers } from 'ethers'
 
@@ -45,6 +46,7 @@ export interface SwapDataV3 {
     minOutput: number,
     priceImpact: number,
     path: IUniV3Token[] | null,
+    packedPath: string,
     exchangeId: number,
     exchangeName: string
 }
@@ -229,9 +231,10 @@ const route3 = async (req: any, res: any) => {
                         fee: [],
                         dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
                         expectedOutput: Number(route.trade.outputAmount.toFixed(route.trade.routes[0].path[route.trade.routes[0].path.length - 1].decimals)),
-                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(route.trade.routes[0].path[-1].decimals)),
+                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(route.trade.routes[0].path[route.trade.routes[0].path.length - 1].decimals)),
                         priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                         path: [],
+                        packedPath: '',
                         exchangeId: -1,
                         exchangeName: 'Uniswap v3'
                     }
@@ -251,7 +254,18 @@ const route3 = async (req: any, res: any) => {
                     route.trade.routes[0].pools.map(e => {
                         let pool: any = e;
                         swap.fee.push(pool.fee);
-                    })
+                    });
+
+                    let packedPathData: string = '';
+
+                    for (let i = 0; i < swap.fee.length; i++)
+                    {
+                        packedPathData += swap.path[i].address.replace('0x', '').padStart(64, '0');
+                        packedPathData += swap.fee[i].toString(16).padStart(64, '0');
+                    }
+
+                    packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(64, '0');
+                    swap.packedPath = '0x' + packedPathData;
 
                     if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
                         bestSwap = swap;

@@ -12,6 +12,12 @@ export class Conversions {
         return b.floor().getValue();
     }
 
+    static toAuHex = (value: BigDecimal, decimals: number): string => {
+        if (isNaN(decimals)) decimals = 18;
+        let b = value.multiply(new BigDecimal(Math.pow(10, decimals)));
+        return (Number(b.floor().getValue())).toString(16).padStart(64, '0');
+    }
+
     static truncate = (num: BigDecimal | null, digits: number): string => {
         if (num == null) return '0.'.padEnd(digits + 2, '0');
 
