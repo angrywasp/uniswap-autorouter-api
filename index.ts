@@ -2,8 +2,8 @@ import express from 'express';
 import BigDecimal from 'js-big-decimal';
 import { AlphaRouter, SwapRoute } from '@uniswap/smart-order-router';
 import { Token, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core';
-import { Pair } from '@uniswap/v2-sdk';
-import { Pool } from '@uniswap/v3-sdk'
+import { Pair, Route as RouteV2 } from '@uniswap/v2-sdk';
+import { Pool, Route as RouteV3 } from '@uniswap/v3-sdk'
 import Web3 from 'web3';
 import Mixed from 'web3-utils';
 import { AbiItem } from 'web3-utils'
@@ -35,7 +35,8 @@ export interface SwapDataV2 {
     priceImpact: number,
     path: IBaseToken[] | null,
     exchangeId: number,
-    exchangeName: string
+    exchangeName: string,
+    protocol: number
 }
 
 export interface SwapDataV3 {
@@ -48,7 +49,8 @@ export interface SwapDataV3 {
     path: IUniV3Token[] | null,
     packedPath: string,
     exchangeId: number,
-    exchangeName: string
+    exchangeName: string,
+    protocol: number
 }
 
 app.get('/', (req: any, res: any) => {
@@ -144,7 +146,8 @@ const route2 = async (req: any, res: any) => {
                             priceImpact: Number(swap.priceImpact.getValue()),
                             path: swap.path,
                             exchangeId: swap.exchangeId,
-                            exchangeName: swap.exchangeName
+                            exchangeName: swap.exchangeName,
+                            protocol: 2
                         };
                 } catch (e) {
                     console.log(e);
@@ -205,7 +208,7 @@ const route3 = async (req: any, res: any) => {
 
         const router = new AlphaRouter({ chainId: chainId, provider: rpcProvider });
 
-        let bestSwap: SwapDataV3 | null = null;
+        let bestSwap: SwapDataV3 | SwapDataV2 | null = null;
 
         let trader = new web3.eth.Contract(TraderAbi as AbiItem[], Config.networks[req.params.id].exchange);
 
@@ -226,49 +229,86 @@ const route3 = async (req: any, res: any) => {
                     if (route == null)
                         return;
 
-                    let swap: SwapDataV3 = {
-                        input: Number(req.query.amount),
-                        fee: [],
-                        dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
-                        expectedOutput: Number(route.trade.outputAmount.toFixed(route.trade.routes[0].path[route.trade.routes[0].path.length - 1].decimals)),
-                        minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(route.trade.routes[0].path[route.trade.routes[0].path.length - 1].decimals)),
-                        priceImpact: Number(route.trade.priceImpact.toFixed(3)),
-                        path: [],
-                        packedPath: '',
-                        exchangeId: -1,
-                        exchangeName: 'Uniswap v3'
+                    let r = route.trade.routes[0];
+
+                    if (r instanceof RouteV2) {
+                        let swap: SwapDataV2 = {
+                            input: Number(req.query.amount),
+                            fee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), 30)),
+                            dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
+                            expectedOutput: Number(route.trade.outputAmount.toFixed(r.path[r.path.length - 1].decimals)),
+                            minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
+                            priceImpact: Number(route.trade.priceImpact.toFixed(3)),
+                            path: [],
+                            exchangeId: e.id,
+                            exchangeName: 'Uniswap v2',
+                            protocol: 2
+                        };
+
+                        r.path.map(e => {
+                            swap.path!.push({
+                                address: e.address,
+                                name: e.name!,
+                                ticker: e.symbol!,
+                                decimals: e.decimals
+                            })
+                        });
+
+                        if (swap.path == null)
+                            return;
+
+                        if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
+                            bestSwap = swap;
                     }
+                    else if (r instanceof RouteV3) {
+                        let swap: SwapDataV3 = {
+                            input: Number(req.query.amount),
+                            fee: [],
+                            dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
+                            expectedOutput: Number(route.trade.outputAmount.toFixed(r.path[r.path.length - 1].decimals)),
+                            minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
+                            priceImpact: Number(route.trade.priceImpact.toFixed(3)),
+                            path: [],
+                            packedPath: '',
+                            exchangeId: e.id,
+                            exchangeName: 'Uniswap v3',
+                            protocol: 3
+                        };
 
-                    route.trade.routes[0].path.map(e => {
-                        swap.path!.push({
-                            address: e.address,
-                            name: e.name!,
-                            ticker: e.symbol!,
-                            decimals: e.decimals
-                        })
-                    });
+                        r.path.map(e => {
+                            swap.path!.push({
+                                address: e.address,
+                                name: e.name!,
+                                ticker: e.symbol!,
+                                decimals: e.decimals
+                            })
+                        });
 
-                    if (swap.path == null)
+                        if (swap.path == null)
+                            return;
+
+                        r.pools.map(e => {
+                            let pool: any = e;
+                            swap.fee.push(pool.fee);
+                        });
+
+                        let packedPathData: string = '';
+
+                        for (let i = 0; i < swap.fee.length; i++) {
+                            packedPathData += swap.path[i].address.replace('0x', '').padStart(64, '0');
+                            packedPathData += swap.fee[i].toString(16).padStart(64, '0');
+                        }
+
+                        packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(64, '0');
+                        swap.packedPath = '0x' + packedPathData;
+
+                        if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
+                            bestSwap = swap;
+                    }
+                    else {
+                        res.status(500).send();
                         return;
-
-                    route.trade.routes[0].pools.map(e => {
-                        let pool: any = e;
-                        swap.fee.push(pool.fee);
-                    });
-
-                    let packedPathData: string = '';
-
-                    for (let i = 0; i < swap.fee.length; i++)
-                    {
-                        packedPathData += swap.path[i].address.replace('0x', '').padStart(64, '0');
-                        packedPathData += swap.fee[i].toString(16).padStart(64, '0');
                     }
-
-                    packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(64, '0');
-                    swap.packedPath = '0x' + packedPathData;
-
-                    if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
-                        bestSwap = swap;
                 } catch (e) {
                     console.log(e);
                     res.status(500).send();
