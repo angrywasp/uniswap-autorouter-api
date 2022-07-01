@@ -230,6 +230,7 @@ const route3 = async (req: any, res: any) => {
                         return;
 
                     let r = route.trade.routes[0];
+                    console.log(route);
 
                     if (r instanceof RouteV2) {
                         let swap: SwapDataV2 = {
@@ -240,7 +241,7 @@ const route3 = async (req: any, res: any) => {
                             minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
-                            exchangeId: e.id,
+                            exchangeId: 0, //todo: this needs to be the index of the uniswap v2 exchange on this network
                             exchangeName: 'Uniswap v2',
                             protocol: 2
                         };
@@ -270,7 +271,7 @@ const route3 = async (req: any, res: any) => {
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
                             packedPath: '',
-                            exchangeId: e.id,
+                            exchangeId: 0, //todo: this needs to be the index of the uniswap v3 exchange on this network
                             exchangeName: 'Uniswap v3',
                             protocol: 3
                         };
@@ -295,11 +296,11 @@ const route3 = async (req: any, res: any) => {
                         let packedPathData: string = '';
 
                         for (let i = 0; i < swap.fee.length; i++) {
-                            packedPathData += swap.path[i].address.replace('0x', '').padStart(64, '0');
-                            packedPathData += swap.fee[i].toString(16).padStart(64, '0');
+                            packedPathData += swap.path[i].address.replace('0x', '').padStart(40, '0');
+                            packedPathData += swap.fee[i].toString(16).padStart(6, '0');
                         }
 
-                        packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(64, '0');
+                        packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(40, '0');
                         swap.packedPath = '0x' + packedPathData;
 
                         if (bestSwap == null || (swap != null && swap.minOutput > bestSwap.minOutput))
