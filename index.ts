@@ -65,6 +65,21 @@ const test = (req: any, res: any) => {
     res.status(200).send('hello');
 }
 
+const getUniswapExchangeId = (chainId: number, uniswapVersion: number): any => {
+    let map: {[key: number]: { uniV2: number, uniV3: number }} = {
+        1: {uniV2: 0, uniV3: 4 },
+        4: {uniV2: 0, uniV3: 1 },
+        137: {uniV2: -1, uniV3: 2}
+    };
+
+    if (uniswapVersion === 2)
+        return map[chainId].uniV2;
+    else if (uniswapVersion === 3)
+        return map[chainId].uniV3;
+    else
+        return -1;
+};
+
 const route2 = async (req: any, res: any) => {
     try {
         let chainId = Config.networks[req.params.id].id;
@@ -215,11 +230,9 @@ const route3 = async (req: any, res: any) => {
         await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
             if (e.uniswapVersion == 3) {
                 try {
-
                     let dexFee = FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee);
                     let fromAmount = CurrencyAmount.fromRawAmount(fromToken, Conversions.toAu(new BigDecimal(req.query.amount).subtract(dexFee), await fromDecimals));
 
-                    //let dexInfo: any = await trader.methods.queryDex(e.id).call(); 
                     const route = await router.route(fromAmount, toToken, TradeType.EXACT_INPUT, {
                         recipient: sender,
                         slippageTolerance: new Percent(req.query.slippage, 10000),
@@ -230,7 +243,6 @@ const route3 = async (req: any, res: any) => {
                         return;
 
                     let r = route.trade.routes[0];
-                    console.log(route);
 
                     if (r instanceof RouteV2) {
                         let swap: SwapDataV2 = {
@@ -241,10 +253,13 @@ const route3 = async (req: any, res: any) => {
                             minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
-                            exchangeId: 0, //todo: this needs to be the index of the uniswap v2 exchange on this network
+                            exchangeId: getUniswapExchangeId(chainId, 2),
                             exchangeName: 'Uniswap v2',
                             protocol: 2
                         };
+
+                        if (swap.exchangeId === -1)
+                            return;
 
                         r.path.map(e => {
                             swap.path!.push({
@@ -271,10 +286,13 @@ const route3 = async (req: any, res: any) => {
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
                             packedPath: '',
-                            exchangeId: 0, //todo: this needs to be the index of the uniswap v3 exchange on this network
+                            exchangeId: getUniswapExchangeId(chainId, 3),
                             exchangeName: 'Uniswap v3',
                             protocol: 3
                         };
+
+                        if (swap.exchangeId === -1)
+                            return;
 
                         r.path.map(e => {
                             swap.path!.push({

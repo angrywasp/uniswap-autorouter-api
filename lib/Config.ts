@@ -53,7 +53,7 @@ export class Config {
             exchanges: [
                 {
                     id: 0,
-                    name: 'UniSwap v2',
+                    name: 'UniSwap',
                     uniswapVersion: 2
                 },
                 {
@@ -111,7 +111,7 @@ export class Config {
             exchanges: [
                 {
                     id: 0,
-                    name: 'UniSwap v2',
+                    name: 'UniSwap',
                     uniswapVersion: 2
                 },
                 {
