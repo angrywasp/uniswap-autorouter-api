@@ -1,11 +1,13 @@
 import express from 'express';
+import cors from 'cors';
+import https from 'https';
+import fs from 'fs';
 import BigDecimal from 'js-big-decimal';
-import { AlphaRouter, SwapRoute } from '@uniswap/smart-order-router';
+import { AlphaRouter } from '@uniswap/smart-order-router';
 import { Token, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core';
-import { Pair, Route as RouteV2 } from '@uniswap/v2-sdk';
-import { Pool, Route as RouteV3 } from '@uniswap/v3-sdk'
+import { Route as RouteV2 } from '@uniswap/v2-sdk';
+import { Route as RouteV3 } from '@uniswap/v3-sdk'
 import Web3 from 'web3';
-import Mixed from 'web3-utils';
 import { AbiItem } from 'web3-utils'
 import { ethers } from 'ethers'
 
@@ -19,35 +21,15 @@ import { Conversions } from './lib/Conversions';
 const app = express();
 const port = 8002;
 
-interface IUniV3Token extends IBaseToken {
-    address: string,
-    name: string,
-    ticker: string,
-    decimals: number
-}
-
-export interface SwapDataV2 {
-    input: number,
-    fee: number,
-    dexFee: number,
-    expectedOutput: number,
-    minOutput: number,
-    priceImpact: number,
-    path: IBaseToken[] | null,
-    exchangeId: number,
-    exchangeName: string,
-    protocol: number
-}
-
-export interface SwapDataV3 {
+export interface CommonSwapData {
     input: number,
     fee: number[],
     dexFee: number,
     expectedOutput: number,
     minOutput: number,
     priceImpact: number,
-    path: IUniV3Token[] | null,
-    packedPath: string,
+    path: IBaseToken[] | null,
+    packedPath: string | null,
     exchangeId: number,
     exchangeName: string,
     protocol: number
@@ -57,8 +39,15 @@ app.get('/', (req: any, res: any) => {
     res.render('index');
 });
 
-app.listen(port, () => {
-    console.log(`server started at http://localhost:${port}`);
+app.use(cors({
+    origin: '*'
+}));
+
+https.createServer({
+    key: fs.readFileSync('./live/router.civiport.online/privkey.pem'),
+    cert: fs.readFileSync('./live/router.civiport.online/fullchain.pem')
+}, app).listen(port, () => {
+    console.log(`Listening at port ${port}`);
 });
 
 const test = (req: any, res: any) => {
@@ -66,10 +55,10 @@ const test = (req: any, res: any) => {
 }
 
 const getUniswapExchangeId = (chainId: number, uniswapVersion: number): any => {
-    let map: {[key: number]: { uniV2: number, uniV3: number }} = {
-        1: {uniV2: 0, uniV3: 4 },
-        4: {uniV2: 0, uniV3: 1 },
-        137: {uniV2: -1, uniV3: 2}
+    let map: { [key: number]: { uniV2: number, uniV3: number } } = {
+        1: { uniV2: 0, uniV3: 4 },
+        4: { uniV2: 0, uniV3: 1 },
+        137: { uniV2: -1, uniV3: 2 }
     };
 
     if (uniswapVersion === 2)
@@ -82,8 +71,9 @@ const getUniswapExchangeId = (chainId: number, uniswapVersion: number): any => {
 
 const route2 = async (req: any, res: any) => {
     try {
-        let chainId = Config.networks[req.params.id].id;
-        let chainRpc = Config.networks[req.params.id].rpc;
+        let idParam = req.params.id.toLowerCase();
+        let chainId = Config.networks[idParam].id;
+        let chainRpc = Config.networks[idParam].rpc;
 
         let from = req.query.from;
         let to = req.query.to;
@@ -97,10 +87,10 @@ const route2 = async (req: any, res: any) => {
         let toContract = new web3.eth.Contract(TokenAbi as AbiItem[], to);
 
         let network: INetwork = {
-            chainId: Config.networks[req.params.id].id,
-            rpc: Config.networks[req.params.id].rpc,
-            exchange: Config.networks[req.params.id].exchange,
-            exchangeBasePairs: Config.networks[req.params.id].exchangeBasePairs
+            chainId: Config.networks[idParam].id,
+            rpc: Config.networks[idParam].rpc,
+            exchange: Config.networks[idParam].exchange,
+            exchangeBasePairs: Config.networks[idParam].exchangeBasePairs
         }
 
         let fromName = fromContract.methods.name().call();
@@ -133,9 +123,9 @@ const route2 = async (req: any, res: any) => {
             decimals: Number(await toDecimals)
         };
 
-        let bestSwap: SwapDataV2 | null = null;
+        let bestSwap: CommonSwapData | null = null;
 
-        await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
+        await Promise.all(Config.networks[idParam].exchanges.map(async e => {
             if (e.uniswapVersion == 2) {
                 try {
                     let ex: IExchange = {
@@ -154,12 +144,13 @@ const route2 = async (req: any, res: any) => {
                     if (bestSwap == null || swap.minOutput > new BigDecimal(bestSwap.minOutput))
                         bestSwap = {
                             input: Number(swap.input.getValue()),
-                            fee: Number(swap.fee.getValue()),
+                            fee: [Number(swap.fee.getValue())],
                             dexFee: Number(swap.dexFee.getValue()),
                             expectedOutput: Number(Number(swap.expectedOutput.getValue()).toFixed(swap.path[swap.path.length - 1].decimals)),
                             minOutput: Number(Number(swap.minOutput.getValue()).toFixed(swap.path[swap.path.length - 1].decimals)),
                             priceImpact: Number(swap.priceImpact.getValue()),
                             path: swap.path,
+                            packedPath: null,
                             exchangeId: swap.exchangeId,
                             exchangeName: swap.exchangeName,
                             protocol: 2
@@ -186,12 +177,15 @@ const route2 = async (req: any, res: any) => {
 
 const route3 = async (req: any, res: any) => {
     try {
-        let chainId = Config.networks[req.params.id].id;
-        let chainRpc = Config.networks[req.params.id].rpc;
+        let idParam = req.params.id.toLowerCase();
+        let chainId = Config.networks[idParam].id;
+        let chainRpc = Config.networks[idParam].rpc;
 
         let from = req.query.from;
         let to = req.query.to;
         let sender = req.query.sender;
+
+        console.log(chainId, from, to);
 
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
 
@@ -223,11 +217,11 @@ const route3 = async (req: any, res: any) => {
 
         const router = new AlphaRouter({ chainId: chainId, provider: rpcProvider });
 
-        let bestSwap: SwapDataV3 | SwapDataV2 | null = null;
+        let bestSwap: CommonSwapData | null = null;
 
-        let trader = new web3.eth.Contract(TraderAbi as AbiItem[], Config.networks[req.params.id].exchange);
+        let trader = new web3.eth.Contract(TraderAbi as AbiItem[], Config.networks[idParam].exchange);
 
-        await Promise.all(Config.networks[req.params.id].exchanges.map(async e => {
+        await Promise.all(Config.networks[idParam].exchanges.map(async e => {
             if (e.uniswapVersion == 3) {
                 try {
                     let dexFee = FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee);
@@ -245,14 +239,15 @@ const route3 = async (req: any, res: any) => {
                     let r = route.trade.routes[0];
 
                     if (r instanceof RouteV2) {
-                        let swap: SwapDataV2 = {
+                        let swap: CommonSwapData = {
                             input: Number(req.query.amount),
-                            fee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), 30)),
+                            fee: [Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), 30))],
                             dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
                             expectedOutput: Number(route.trade.outputAmount.toFixed(r.path[r.path.length - 1].decimals)),
                             minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
+                            packedPath: null,
                             exchangeId: getUniswapExchangeId(chainId, 2),
                             exchangeName: 'Uniswap v2',
                             protocol: 2
@@ -277,7 +272,7 @@ const route3 = async (req: any, res: any) => {
                             bestSwap = swap;
                     }
                     else if (r instanceof RouteV3) {
-                        let swap: SwapDataV3 = {
+                        let swap: CommonSwapData = {
                             input: Number(req.query.amount),
                             fee: [],
                             dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
@@ -285,7 +280,7 @@ const route3 = async (req: any, res: any) => {
                             minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
                             priceImpact: Number(route.trade.priceImpact.toFixed(3)),
                             path: [],
-                            packedPath: '',
+                            packedPath: null,
                             exchangeId: getUniswapExchangeId(chainId, 3),
                             exchangeName: 'Uniswap v3',
                             protocol: 3

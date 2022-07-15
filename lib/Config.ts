@@ -192,7 +192,7 @@ export class Config {
         },
         matic: {
             id: 137,
-            rpc: 'https://rpc-mainnet.maticvigil.com',
+            rpc: 'https://polygon-rpc.com',
             exchangeBasePairs: [
                 {
                     address: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
@@ -229,6 +229,12 @@ export class Config {
                     name: '(PoS) Tether USD',
                     ticker: 'USDT',
                     decimals: 6
+                },
+                {
+                    address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
+                    name: '(PoS) Dai Stablecoin',
+                    ticker: 'DAI',
+                    decimals: 18
                 }
             ],
             exchanges: [
