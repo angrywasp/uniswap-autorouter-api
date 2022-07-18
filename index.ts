@@ -22,12 +22,12 @@ const app = express();
 const port = 8002;
 
 export interface CommonSwapData {
-    input: number,
-    fee: number[],
-    dexFee: number,
-    expectedOutput: number,
-    minOutput: number,
-    priceImpact: number,
+    input: string,
+    fee: string[],
+    dexFee: string,
+    expectedOutput: string,
+    minOutput: string,
+    priceImpact: string,
     path: IBaseToken[] | null,
     packedPath: string | null,
     exchangeId: number,
@@ -80,6 +80,8 @@ const route2 = async (req: any, res: any) => {
         let sender = req.query.sender;
         let amount = req.query.amount;
         let slippage = req.query.slippage;
+
+        console.log('route2', chainId, from, to);
 
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
 
@@ -143,12 +145,12 @@ const route2 = async (req: any, res: any) => {
 
                     if (bestSwap == null || swap.minOutput > new BigDecimal(bestSwap.minOutput))
                         bestSwap = {
-                            input: Number(swap.input.getValue()),
-                            fee: [Number(swap.fee.getValue())],
-                            dexFee: Number(swap.dexFee.getValue()),
-                            expectedOutput: Number(Number(swap.expectedOutput.getValue()).toFixed(swap.path[swap.path.length - 1].decimals)),
-                            minOutput: Number(Number(swap.minOutput.getValue()).toFixed(swap.path[swap.path.length - 1].decimals)),
-                            priceImpact: Number(swap.priceImpact.getValue()),
+                            input: swap.input.getValue(),
+                            fee: [swap.fee.getValue()],
+                            dexFee: swap.dexFee.getValue(),
+                            expectedOutput: swap.expectedOutput.getValue(),
+                            minOutput: swap.minOutput.getValue(),
+                            priceImpact: swap.priceImpact.getValue(),
                             path: swap.path,
                             packedPath: null,
                             exchangeId: swap.exchangeId,
@@ -185,7 +187,7 @@ const route3 = async (req: any, res: any) => {
         let to = req.query.to;
         let sender = req.query.sender;
 
-        console.log(chainId, from, to);
+        console.log('route3', chainId, from, to);
 
         let web3 = new Web3(new Web3.providers.HttpProvider(chainRpc));
 
@@ -240,12 +242,12 @@ const route3 = async (req: any, res: any) => {
 
                     if (r instanceof RouteV2) {
                         let swap: CommonSwapData = {
-                            input: Number(req.query.amount),
-                            fee: [Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), 30))],
-                            dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
-                            expectedOutput: Number(route.trade.outputAmount.toFixed(r.path[r.path.length - 1].decimals)),
-                            minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
-                            priceImpact: Number(route.trade.priceImpact.toFixed(3)),
+                            input: req.query.amount.toString(),
+                            fee: [FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), 30).getValue()],
+                            dexFee: FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue(),
+                            expectedOutput: route.trade.outputAmount.toExact(),
+                            minOutput: route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toExact(),
+                            priceImpact: route.trade.priceImpact.toFixed(3),
                             path: [],
                             packedPath: null,
                             exchangeId: getUniswapExchangeId(chainId, 2),
@@ -273,12 +275,12 @@ const route3 = async (req: any, res: any) => {
                     }
                     else if (r instanceof RouteV3) {
                         let swap: CommonSwapData = {
-                            input: Number(req.query.amount),
+                            input: req.query.amount,
                             fee: [],
-                            dexFee: Number(FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue()),
-                            expectedOutput: Number(route.trade.outputAmount.toFixed(r.path[r.path.length - 1].decimals)),
-                            minOutput: Number(route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toFixed(r.path[r.path.length - 1].decimals)),
-                            priceImpact: Number(route.trade.priceImpact.toFixed(3)),
+                            dexFee: FeeCalculator.calculateFeeForTotal(new BigDecimal(req.query.amount), fee).getValue(),
+                            expectedOutput: route.trade.outputAmount.toExact(),
+                            minOutput: route.trade.minimumAmountOut(new Percent(req.query.slippage, 10000), route.trade.outputAmount).toExact(),
+                            priceImpact: route.trade.priceImpact.toFixed(3),
                             path: [],
                             packedPath: null,
                             exchangeId: getUniswapExchangeId(chainId, 3),
@@ -310,7 +312,7 @@ const route3 = async (req: any, res: any) => {
 
                         for (let i = 0; i < swap.fee.length; i++) {
                             packedPathData += swap.path[i].address.replace('0x', '').padStart(40, '0');
-                            packedPathData += swap.fee[i].toString(16).padStart(6, '0');
+                            packedPathData += Number(swap.fee[i]).toString(16).padStart(6, '0');
                         }
 
                         packedPathData += swap.path[swap.path.length - 1].address.replace('0x', '').padStart(40, '0');
