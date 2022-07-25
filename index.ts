@@ -35,10 +35,6 @@ export interface CommonSwapData {
     protocol: number
 }
 
-app.get('/', (req: any, res: any) => {
-    res.render('index');
-});
-
 app.use(cors({
     origin: '*'
 }));
@@ -50,8 +46,9 @@ https.createServer({
     console.log(`Listening at port ${port}`);
 });
 
-const test = (req: any, res: any) => {
-    res.status(200).send('hello');
+const ok = (req: any, res: any) => {
+    res.setHeader('Content-Type', 'text/plain');
+    res.status(200).send('OK');
 }
 
 const getUniswapExchangeId = (chainId: number, uniswapVersion: number): any => {
@@ -345,6 +342,6 @@ const route3 = async (req: any, res: any) => {
     }
 }
 
-app.get('/test/', test);
+app.get('/', ok);
 app.get('/route2/:id/', route2);
 app.get('/route3/:id/', route3);
