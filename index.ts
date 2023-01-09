@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import http from 'http';
 import https from 'https';
 import fs from 'fs';
 import BigDecimal from 'js-big-decimal';
@@ -19,7 +20,8 @@ import { FeeCalculator } from './lib/FeeCalculator';
 import { Conversions } from './lib/Conversions';
 
 const app = express();
-const port = 8002;
+const httpPort = 8000;
+const httpsPort = 9000;
 
 export interface CommonSwapData {
     input: string,
@@ -35,15 +37,29 @@ export interface CommonSwapData {
     protocol: number
 }
 
+const privateKey = fs.readFileSync('/etc/letsencrypt/live/angrywasp.net.au/privkey.pem', 'utf8');
+const certificate = fs.readFileSync('/etc/letsencrypt/live/angrywasp.net.au/cert.pem', 'utf8');
+const ca = fs.readFileSync('/etc/letsencrypt/live/angrywasp.net.au/chain.pem', 'utf8');
+
+const credentials = {
+	key: privateKey,
+	cert: certificate,
+	ca: ca
+};
+
 app.use(cors({
     origin: '*'
 }));
 
-https.createServer({
-    key: fs.readFileSync('./live/router.civiport.online/privkey.pem'),
-    cert: fs.readFileSync('./live/router.civiport.online/fullchain.pem')
-}, app).listen(port, () => {
-    console.log(`Listening at port ${port}`);
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer(credentials, app);
+
+httpServer.listen(httpPort, () => {
+	console.log(`HTTP listening at port ${httpPort}`);
+});
+
+httpsServer.listen(httpsPort, () => {
+	console.log(`HTTPS listening at port ${httpsPort}`);
 });
 
 const ok = (req: any, res: any) => {
